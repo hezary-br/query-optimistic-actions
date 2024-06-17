@@ -1,48 +1,80 @@
-import type { MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node"
+import { useLoaderData } from "@remix-run/react"
+import {
+  HydrationBoundary,
+  QueryClient,
+  dehydrate,
+  useQueryClient,
+} from "@tanstack/react-query"
+import { ButtonIncrement } from "~/components/ButtonIncrement"
+import { MagicNumber } from "~/components/MagicNumber"
+import {
+  MagicNumberProvider,
+  useDecrement,
+  useDouble,
+  useIncrement,
+  useSet,
+} from "~/hooks/useMagicNumber"
 
 export const meta: MetaFunction = () => {
   return [
     { title: "New Remix App" },
     { name: "description", content: "Welcome to Remix!" },
-  ];
-};
+  ]
+}
+
+async function getMagicNumber() {
+  await new Promise(res => setTimeout(res, 1500))
+  return parseInt(Math.random().toString().slice(2, 7))
+}
+
+export async function loader({}: LoaderFunctionArgs) {
+  const queryClient = new QueryClient()
+
+  await Promise.all([
+    queryClient.prefetchQuery({
+      queryKey: ["magic-number"],
+      queryFn: getMagicNumber,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ["magic-number", 30],
+      queryFn: getMagicNumber,
+    }),
+  ])
+
+  return {
+    dehydratedState: dehydrate(queryClient),
+  }
+}
 
 export default function Index() {
+  const { dehydratedState } = useLoaderData<typeof loader>()
+  const queryClient = useQueryClient()
+
+  const decrement = useDecrement(queryClient)
+  const double = useDouble(queryClient)
+  const set = useSet(queryClient)
+
   return (
-    <div className="font-sans p-4">
-      <h1 className="text-3xl">Welcome to Remix</h1>
-      <ul className="list-disc mt-4 pl-6 space-y-2">
-        <li>
-          <a
-            className="text-blue-700 underline visited:text-purple-900"
-            target="_blank"
-            href="https://remix.run/start/quickstart"
-            rel="noreferrer"
-          >
-            5m Quick Start
-          </a>
-        </li>
-        <li>
-          <a
-            className="text-blue-700 underline visited:text-purple-900"
-            target="_blank"
-            href="https://remix.run/start/tutorial"
-            rel="noreferrer"
-          >
-            30m Tutorial
-          </a>
-        </li>
-        <li>
-          <a
-            className="text-blue-700 underline visited:text-purple-900"
-            target="_blank"
-            href="https://remix.run/docs"
-            rel="noreferrer"
-          >
-            Remix Docs
-          </a>
-        </li>
-      </ul>
-    </div>
-  );
+    <HydrationBoundary state={dehydratedState}>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {/* <MagicNumberProvider queryKey={["magic-number", 30]}> */}
+        <ButtonIncrement>increment</ButtonIncrement>
+        {/* </MagicNumberProvider> */}
+        <button onClick={decrement}>Decrement</button>
+        <button onClick={double}>Double</button>
+        <input
+          type="number"
+          onBlur={e => {
+            set(parseInt(e.target.value))
+          }}
+        />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <MagicNumber />
+        <MagicNumber props={[30]} />
+      </div>
+      <pre>{JSON.stringify({ dehydratedState }, null, 2)}</pre>
+    </HydrationBoundary>
+  )
 }
